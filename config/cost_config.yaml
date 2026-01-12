@@ -1,0 +1,73 @@
+# Cost Estimation Configuration
+# All values are configurable
+# Currency: INR (Indian Rupees)
+
+currency: "INR"
+currency_symbol: "₹"
+
+# Hourly rates in INR
+hourly_rates:
+  junior_developer: 500
+  mid_developer: 1000
+  senior_developer: 1500
+  tech_lead: 2500
+  qa_engineer: 800
+  devops_engineer: 1300
+  ui_ux_designer: 1100
+
+# Team compositions for different project sizes
+team_compositions:
+  mvp:
+    description: "Small MVP with 2-4 weeks timeline"
+    junior_developer: 1
+    senior_developer: 1
+
+  standard:
+    description: "Standard project with 4-8 weeks timeline"
+    junior_developer: 2
+    mid_developer: 1
+    senior_developer: 1
+    qa_engineer: 1
+
+  enterprise:
+    description: "Large project with 8+ weeks timeline"
+    junior_developer: 3
+    mid_developer: 2
+    senior_developer: 2
+    tech_lead: 1
+    qa_engineer: 2
+    devops_engineer: 1
+
+# Feature complexity multipliers
+complexity_multipliers:
+  simple: 1.0
+  moderate: 1.5
+  complex: 2.5
+  very_complex: 4.0
+
+# Infrastructure costs (monthly estimates in INR)
+infrastructure_costs:
+  hosting:
+    basic: 4000
+    standard: 16000
+    premium: 40000
+  database:
+    basic: 2000
+    standard: 8000
+    premium: 25000
+  cdn:
+    basic: 800
+    standard: 4000
+    premium: 16000
+  monitoring:
+    basic: 0
+    standard: 4000
+    premium: 12000
+
+# Third-party service estimates (monthly in INR)
+third_party_services:
+  auth_provider: 2000
+  email_service: 1600
+  payment_gateway: 0 # Usually % based
+  analytics: 0
+  error_tracking: 2000
