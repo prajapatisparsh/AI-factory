@@ -72,6 +72,10 @@ class CheckpointManager:
             self.checkpoint_dir = Path(checkpoint_dir)
         
         self.checkpoint_dir.mkdir(exist_ok=True)
+        # Restrict to owner-only on Linux/macOS (H-6)
+        if os.name != 'nt':
+            import stat
+            os.chmod(self.checkpoint_dir, stat.S_IRWXU)
         self._current_checkpoint: Optional[PipelineCheckpoint] = None
     
     def _generate_checkpoint_id(self, project_name: str) -> str:

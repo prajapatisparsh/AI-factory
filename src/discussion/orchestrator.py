@@ -7,6 +7,7 @@ from typing import List, Dict, Optional, Tuple, Callable, Any
 from datetime import datetime
 import logging
 
+from src.schemas import extract_json_object
 from src.discussion.protocol import (
     Discussion,
     DiscussionMessage,
@@ -14,7 +15,7 @@ from src.discussion.protocol import (
     ConsensusStatus
 )
 from src.discussion.memory import SharedMemory
-from src.discussion.topics import DiscussionTopic, DISCUSSION_TOPICS, get_topic
+from src.discussion.topics import DiscussionTopic, get_topic
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,10 @@ class DiscussionOrchestrator:
         self.project_id = project_id
         self.active_discussions: Dict[str, Discussion] = {}
         self._human_callback: Optional[Callable] = None
+        
+        # Lazy import to avoid circular dependency
+        from src.agents.moderator import ModeratorAgent
+        self.moderator = ModeratorAgent()
     
     def set_human_callback(self, callback: Callable[[str, str], str]) -> None:
         """Set callback function for human escalation."""
@@ -277,28 +282,20 @@ RESPOND IN THIS JSON FORMAT:
     
     def _parse_agent_response(self, response: str) -> Dict[str, Any]:
         """Parse agent's JSON response."""
-        import json
-        import re
-        
-        # Try to extract JSON
-        json_match = re.search(r'\{[\s\S]*\}', response)
-        if json_match:
-            try:
-                data = json.loads(json_match.group())
-                # Convert message_type string to enum
-                msg_type_str = data.get('message_type', 'proposal').lower()
-                type_map = {
-                    'proposal': MessageType.PROPOSAL,
-                    'agreement': MessageType.AGREEMENT,
-                    'disagreement': MessageType.DISAGREEMENT,
-                    'suggestion': MessageType.SUGGESTION,
-                    'question': MessageType.QUESTION
-                }
-                data['message_type'] = type_map.get(msg_type_str, MessageType.PROPOSAL)
-                return data
-            except json.JSONDecodeError:
-                pass
-        
+        data = extract_json_object(response)
+        if data:
+            # Convert message_type string to enum
+            msg_type_str = data.get('message_type', 'proposal').lower()
+            type_map = {
+                'proposal': MessageType.PROPOSAL,
+                'agreement': MessageType.AGREEMENT,
+                'disagreement': MessageType.DISAGREEMENT,
+                'suggestion': MessageType.SUGGESTION,
+                'question': MessageType.QUESTION
+            }
+            data['message_type'] = type_map.get(msg_type_str, MessageType.PROPOSAL)
+            return data
+
         # Fallback: treat entire response as content
         return {
             'message_type': MessageType.PROPOSAL,
@@ -339,23 +336,32 @@ RESPOND IN THIS JSON FORMAT:
         return ConsensusStatus.PENDING
     
     def _attempt_resolution(self, discussion: Discussion) -> None:
-        """Try to resolve disagreements."""
-        # Add a moderator message to guide resolution
-        moderator_msg = DiscussionMessage(
-            sender="Moderator",
-            recipient="all",
-            message_type=MessageType.SUMMARY,
-            content="There are differing opinions. Let's focus on finding common ground. What aspects do we all agree on?",
-            topic_id=discussion.topic_id
-        )
-        discussion.add_message(moderator_msg)
+        """Try to resolve disagreements using ModeratorAgent."""
+        disagreements = self.moderator.identify_disagreements(discussion)
+        if disagreements:
+            compromise_msg = self.moderator.propose_compromise(discussion, disagreements)
+            discussion.add_message(compromise_msg)
+        else:
+            # No explicit disagreement messages found — issue a generic nudge
+            discussion.add_message(DiscussionMessage(
+                sender="ModeratorAgent",
+                recipient="all",
+                message_type=MessageType.SUMMARY,
+                content="Let's focus on finding common ground. What aspects do we all agree on?",
+                topic_id=discussion.topic_id
+            ))
     
     def _escalate_to_human(self, discussion: Discussion, topic: DiscussionTopic) -> None:
-        """Escalate to human for decision."""
-        summary = self._summarize_discussion(discussion)
-        
+        """Escalate to human for decision using ModeratorAgent formatting."""
+        summary = self.moderator.summarize_discussion(discussion)
+        formatted = self.moderator.format_for_human(
+            discussion,
+            summary,
+            topic.decision_required
+        )
+
         if self._human_callback:
-            human_decision = self._human_callback(topic.name, summary)
+            human_decision = self._human_callback(topic.name, formatted)
             discussion.finalize(human_decision, "Human decision")
         else:
             logger.warning(f"No human callback set, cannot escalate {topic.name}")
@@ -369,43 +375,23 @@ RESPOND IN THIS JSON FORMAT:
             pref = msg.metadata.get('decision_preference', '')
             if pref:
                 preferences[pref] = preferences.get(pref, 0) + 1
-        
+
         if preferences:
             decision = max(preferences, key=preferences.get)
-            discussion.finalize(
-                decision,
-                f"Majority decision after {discussion.rounds_completed} rounds"
-            )
+            rationale = self.moderator.generate_decision_rationale(discussion, decision)
+            discussion.finalize(decision, rationale)
         else:
-            # Use first proposal
+            # Fall back to first proposal
             for msg in discussion.messages:
                 if msg.message_type == MessageType.PROPOSAL:
-                    discussion.finalize(
-                        msg.content[:200],
-                        "Based on initial proposal (no consensus reached)"
-                    )
+                    decision = msg.content[:200]
+                    rationale = self.moderator.generate_decision_rationale(discussion, decision)
+                    discussion.finalize(decision, rationale)
                     break
     
     def _summarize_discussion(self, discussion: Discussion) -> str:
         """Create a summary of the discussion for human review."""
-        lines = [f"# Discussion Summary: {discussion.topic_name}\n"]
-        lines.append(f"**Rounds:** {discussion.rounds_completed}")
-        lines.append(f"**Participants:** {', '.join(discussion.participants)}\n")
-        
-        lines.append("## Key Points")
-        for msg in discussion.messages:
-            if msg.message_type in [MessageType.PROPOSAL, MessageType.DISAGREEMENT]:
-                lines.append(f"- **{msg.sender}** ({msg.message_type.value}): {msg.content[:150]}...")
-        
-        lines.append("\n## Decision Preferences")
-        seen = set()
-        for msg in discussion.messages:
-            pref = msg.metadata.get('decision_preference', '')
-            if pref and pref not in seen:
-                lines.append(f"- {msg.sender}: {pref}")
-                seen.add(pref)
-        
-        return "\n".join(lines)
+        return self.moderator.summarize_discussion(discussion)
     
     def _record_decision(self, discussion: Discussion) -> None:
         """Record the decision in shared memory."""

@@ -7,11 +7,12 @@ from src.agents.tech_lead import TechLeadAgent
 from src.agents.dev_team import DevTeamAgent
 from src.agents.qa import QAAgent
 from src.agents.coach import CoachAgent
+from src.agents.moderator import ModeratorAgent
 
 __all__ = [
     'BaseAgent',
     'AgentError',
-    'RateLimitError', 
+    'RateLimitError',
     'APIError',
     'ValidationError',
     'VisionAgent',
@@ -19,5 +20,6 @@ __all__ = [
     'TechLeadAgent',
     'DevTeamAgent',
     'QAAgent',
-    'CoachAgent'
+    'CoachAgent',
+    'ModeratorAgent',
 ]

@@ -4,11 +4,10 @@ Generates comprehensive QA reports with security, performance, and consistency c
 """
 
 from typing import List, Dict
-import json
 import re
 
-from src.agents.base import BaseAgent
-from src.schemas import QAReport, QAIssue
+from src.agents.base import BaseAgent, AgentError
+from src.schemas import QAReport, QAIssue, extract_json_object
 
 
 class QAAgent(BaseAgent):
@@ -183,36 +182,24 @@ Be thorough but realistic. Include location for each issue."""
             
             return report
             
-        except Exception as e:
-            self.log(f"QA analysis failed: {e}", "ERROR")
+        except AgentError as e:
+            self.log(f"QA analysis failed (API/network): {e}", "ERROR")
             return self._fallback_qa_report()
+        except Exception:
+            raise  # Let programming bugs surface
     
     def _parse_qa_response(self, response: str) -> QAReport:
         """Parse LLM response into QAReport."""
-        # Try to extract JSON
-        json_patterns = [
-            r'```json\s*([\s\S]*?)\s*```',
-            r'```\s*([\s\S]*?)\s*```',
-            r'\{[\s\S]*\}'
-        ]
-        
-        for pattern in json_patterns:
-            matches = re.findall(pattern, response)
-            for match in matches:
-                json_str = match.strip()
-                if json_str.startswith('{'):
-                    try:
-                        data = json.loads(json_str)
-                        return QAReport(
-                            critical=self._parse_issues(data.get('critical', [])),
-                            high=self._parse_issues(data.get('high', [])),
-                            medium=self._parse_issues(data.get('medium', [])),
-                            low=self._parse_issues(data.get('low', [])),
-                            security_flags=data.get('security_flags', [])
-                        )
-                    except json.JSONDecodeError:
-                        continue
-        
+        data = extract_json_object(response)
+        if data:
+            return QAReport(
+                critical=self._parse_issues(data.get('critical', [])),
+                high=self._parse_issues(data.get('high', [])),
+                medium=self._parse_issues(data.get('medium', [])),
+                low=self._parse_issues(data.get('low', [])),
+                security_flags=self._parse_security_flags(data.get('security_flags', []))
+            )
+
         # Fallback: try to extract issues from text
         self.log("JSON parsing failed, using text extraction", "WARNING")
         return self._extract_issues_from_text(response)
@@ -234,6 +221,20 @@ Be thorough but realistic. Include location for each issue."""
                     location='Unspecified'
                 ))
         return issues
+    
+    def _parse_security_flags(self, flags_data: list) -> List[str]:
+        """Normalise security_flags — LLM may return strings or dicts."""
+        result = []
+        for item in flags_data:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict):
+                # Build a readable string from whatever keys the LLM chose
+                desc = item.get('desc') or item.get('description') or item.get('flag') or ''
+                location = item.get('location') or item.get('endpoint') or item.get('id') or ''
+                parts = [p for p in (desc, location) if p]
+                result.append(' — '.join(parts) if parts else str(item))
+        return result
     
     def _extract_issues_from_text(self, text: str) -> QAReport:
         """Extract issues from unstructured text."""

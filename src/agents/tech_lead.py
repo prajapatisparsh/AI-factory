@@ -5,8 +5,8 @@ Generates comprehensive technical architecture specifications.
 
 from typing import List, Optional
 
-from src.agents.base import BaseAgent
-from src.schemas import DocumentAnalysis, UserStory, ArchitectureSpec
+from src.agents.base import BaseAgent, AgentError
+from src.schemas import DocumentAnalysis, UserStory
 
 
 class TechLeadAgent(BaseAgent):
@@ -42,11 +42,7 @@ class TechLeadAgent(BaseAgent):
         """
         self.log("Generating architecture specification")
         
-        # Detect domain and get domain-specific guidance
-        domain = self._detect_domain(context)
-        domain_guidance = self._get_domain_template(domain)
-        
-        base_system = f"""You are a senior Technical Architect designing MVP architecture.
+        base_system = """You are a senior Technical Architect designing MVP architecture.
 
 Create a comprehensive architecture document that includes:
 1. **Technology Stack** - Justified choices for each layer
@@ -62,9 +58,7 @@ Design for:
 - Horizontal scalability
 - Security by default
 - Developer experience
-- Production readiness
-
-{domain_guidance}"""
+- Production readiness"""
 
         system_prompt = self.build_system_prompt(base_system)
         
@@ -82,7 +76,6 @@ Design for:
 
 ## Project Overview
 - Type: {context.project_type.value}
-- Domain: {domain.upper()}
 - Features: {', '.join(context.features)}
 - User Personas: {', '.join(context.personas)}
 
@@ -100,7 +93,7 @@ Design for:
 
 Generate a comprehensive Markdown architecture document with all sections listed above.
 Include specific technology versions, database schemas, and API endpoint definitions.
-Justify each technology choice based on the requirements and DOMAIN-SPECIFIC needs."""
+Justify each technology choice based on the requirements."""
 
         try:
             response = self.call_llm(system_prompt, user_prompt, temperature=0.4, max_tokens=4000)
@@ -110,9 +103,11 @@ Justify each technology choice based on the requirements and DOMAIN-SPECIFIC nee
             self.log("Architecture specification generated")
             return architecture
             
-        except Exception as e:
+        except AgentError as e:
             self.log(f"Architecture generation failed: {e}", "ERROR")
             return self._fallback_architecture(context, user_stories)
+        except Exception:
+            raise  # Let programming bugs surface
     
     def _format_architecture(self, raw_response: str) -> str:
         """Format and validate architecture document."""
@@ -137,159 +132,6 @@ Justify each technology choice based on the requirements and DOMAIN-SPECIFIC nee
                 content += f"\n\n## {section}\n\n*[Section to be detailed during implementation]*\n"
         
         return content
-    
-    def _detect_domain(self, context: DocumentAnalysis) -> str:
-        """Detect the project domain from features and requirements."""
-        features_text = ' '.join(context.features).lower()
-        full_text = context.full_text.lower() if context.full_text else ''
-        combined = features_text + ' ' + full_text
-        
-        # E-commerce indicators
-        if any(kw in combined for kw in ['cart', 'checkout', 'product catalog', 'inventory', 'shop', 'store', 'e-commerce', 'ecommerce', 'order management', 'sku']):
-            return 'ecommerce'
-        
-        # SaaS indicators
-        if any(kw in combined for kw in ['subscription', 'tenant', 'multi-tenant', 'saas', 'billing plan', 'tier', 'usage meter', 'seat license']):
-            return 'saas'
-        
-        # Healthcare indicators
-        if any(kw in combined for kw in ['patient', 'medical', 'healthcare', 'health', 'hipaa', 'appointment', 'doctor', 'clinic', 'diagnosis', 'prescription']):
-            return 'healthcare'
-        
-        # Fintech indicators
-        if any(kw in combined for kw in ['payment', 'transaction', 'wallet', 'banking', 'fintech', 'money transfer', 'ledger', 'kyc', 'compliance', 'financial']):
-            return 'fintech'
-        
-        # Social media indicators
-        if any(kw in combined for kw in ['social', 'feed', 'post', 'follow', 'like', 'share', 'comment', 'friend', 'profile', 'timeline', 'community']):
-            return 'social'
-        
-        # Marketplace indicators
-        if any(kw in combined for kw in ['marketplace', 'seller', 'buyer', 'listing', 'bid', 'auction', 'vendor', 'commission', 'escrow']):
-            return 'marketplace'
-        
-        # Content/CMS indicators
-        if any(kw in combined for kw in ['content', 'cms', 'article', 'blog', 'publish', 'editor', 'media library']):
-            return 'content'
-        
-        # Education/LMS indicators
-        if any(kw in combined for kw in ['course', 'student', 'learning', 'lesson', 'quiz', 'enrollment', 'instructor', 'lms', 'education']):
-            return 'education'
-        
-        return 'general'
-    
-    def _get_domain_template(self, domain: str) -> str:
-        """Get domain-specific architecture guidance."""
-        templates = {
-            'ecommerce': """
-## E-COMMERCE DOMAIN REQUIREMENTS
-Apply these e-commerce specific patterns:
-- **Product Catalog**: Implement product variants (size, color), SKU management, inventory tracking
-- **Shopping Cart**: Session-based cart with persistence, abandoned cart recovery
-- **Checkout Flow**: Multi-step checkout with address validation, shipping calculation
-- **Payment Integration**: Stripe/PayPal integration with webhook handling for payment confirmation
-- **Order Management**: Order states (pending, paid, shipped, delivered, refunded), email notifications
-- **Inventory**: Real-time stock tracking, low-stock alerts, backorder handling
-- **Search**: Elasticsearch or Algolia for product search with faceted filtering
-- **Security**: PCI-DSS compliance considerations for payment data
-""",
-            'saas': """
-## SAAS DOMAIN REQUIREMENTS
-Apply these SaaS-specific patterns:
-- **Multi-tenancy**: Data isolation strategy (schema-per-tenant vs row-level security)
-- **Subscription Management**: Plan tiers, billing cycles, usage metering, Stripe/Chargebee integration
-- **User Management**: Roles within organization (Admin, Member, Viewer), invite system
-- **Feature Flags**: LaunchDarkly or custom solution for feature gating by plan
-- **Onboarding**: Setup wizard, data import tools, sample data generation
-- **Usage Analytics**: Track feature usage for billing and product insights
-- **API Access**: Rate limiting by plan, API key management, webhook system
-- **Audit Logs**: Track all configuration changes for compliance
-""",
-            'healthcare': """
-## HEALTHCARE DOMAIN REQUIREMENTS
-Apply these healthcare-specific patterns:
-- **HIPAA Compliance**: Encryption at rest (AES-256), encryption in transit (TLS 1.3), audit logging
-- **Patient Data**: PHI protection, consent management, data retention policies
-- **Authentication**: MFA required, session timeout after 15 minutes of inactivity
-- **Audit Trail**: Immutable logs of all data access with user, timestamp, action
-- **Appointment System**: Calendar integration, reminder notifications, booking rules
-- **Interoperability**: HL7 FHIR standards for health data exchange
-- **Access Control**: Role-based (Doctor, Nurse, Admin, Patient) with fine-grained permissions
-- **Data Backup**: Daily encrypted backups with 90-day retention, disaster recovery plan
-""",
-            'fintech': """
-## FINTECH DOMAIN REQUIREMENTS
-Apply these financial-specific patterns:
-- **Transaction Integrity**: ACID compliance, double-entry accounting, idempotency keys
-- **KYC/AML**: Identity verification integration (Jumio, Onfido), watchlist screening
-- **Security**: PCI-DSS compliance, HSM for key management, fraud detection
-- **Audit Trail**: Immutable transaction logs, regulatory reporting exports
-- **Money Movement**: Ledger architecture, settlement processing, reconciliation
-- **Notification**: Real-time transaction alerts, two-factor for high-value operations
-- **Rate Limiting**: Strict limits on financial operations, velocity checks
-- **Compliance**: Regulatory holds, suspicious activity reporting, data retention requirements
-""",
-            'social': """
-## SOCIAL PLATFORM DOMAIN REQUIREMENTS
-Apply these social-specific patterns:
-- **Content Feed**: Personalized feed algorithm, pagination with cursor-based approach
-- **Real-time Features**: WebSocket connections for notifications, live updates
-- **Media Handling**: Image/video upload, CDN delivery, thumbnail generation
-- **Engagement**: Like/reaction system, comment threading, share tracking
-- **Notifications**: Push notifications (FCM/APNs), email digests, in-app alerts
-- **Content Moderation**: Flagging system, automated content scanning, admin tools
-- **Privacy Controls**: Block/mute, visibility settings, data export (GDPR)
-- **Scalability**: Read-heavy architecture, caching layer, eventual consistency acceptable
-""",
-            'marketplace': """
-## MARKETPLACE DOMAIN REQUIREMENTS
-Apply these marketplace-specific patterns:
-- **Dual-sided**: Separate flows for buyers and sellers, verification for sellers
-- **Listing Management**: Approval workflow, listing lifecycle, featured placement
-- **Search & Discovery**: Full-text search, category hierarchy, location-based filtering
-- **Transaction Flow**: Escrow for payments, dispute resolution, refund handling
-- **Commission System**: Fee calculation, payout scheduling, seller statements
-- **Messaging**: Buyer-seller communication, inquiry system, notifications
-- **Reviews & Ratings**: Verified purchase reviews, rating aggregation, moderation
-- **Trust & Safety**: Fraud detection, identity verification, content moderation
-""",
-            'education': """
-## EDUCATION/LMS DOMAIN REQUIREMENTS
-Apply these education-specific patterns:
-- **Course Structure**: Modules, lessons, content types (video, text, quiz)
-- **Progress Tracking**: Completion status, resume position, learning paths
-- **Assessment**: Quiz engine, grading system, certificates generation
-- **Enrollment**: Cohort management, prerequisites, access expiration
-- **Video Delivery**: Adaptive streaming, progress tracking, DRM for paid content
-- **Discussion**: Course forums, Q&A, instructor responses
-- **Reporting**: Student progress reports, course analytics, completion rates
-- **Accessibility**: WCAG compliance, closed captions, screen reader support
-""",
-            'content': """
-## CONTENT/CMS DOMAIN REQUIREMENTS
-Apply these content-specific patterns:
-- **Content Types**: Flexible schema for articles, pages, media
-- **Editorial Workflow**: Draft, review, publish, schedule states
-- **Media Management**: Asset library, image optimization, CDN delivery
-- **SEO**: Meta tags, sitemap generation, structured data
-- **Versioning**: Content history, rollback capability, diff view
-- **Personalization**: User segments, A/B testing, recommendations
-- **Performance**: Static generation where possible, cache invalidation
-- **Multi-language**: i18n support, translation workflow, locale routing
-"""
-        }
-        
-        return templates.get(domain, """
-## GENERAL APPLICATION PATTERNS
-Apply standard best practices:
-- RESTful API design with consistent error handling
-- JWT authentication with refresh token rotation
-- PostgreSQL with proper indexing strategy
-- Redis for caching and session management
-- Queue-based background job processing
-- Structured logging with correlation IDs
-- Health check endpoints for monitoring
-""")
     
     def _fallback_architecture(
         self,
@@ -476,123 +318,7 @@ Add [UPDATED] markers to changed sections."""
             response = self.call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=4000)
             self.log("Architecture review complete")
             return response
-        except Exception as e:
+        except AgentError as e:
             self.log(f"Architecture review failed: {e}", "ERROR")
             # Return original with issues noted
             return architecture + f"\n\n## Pending QA Issues\n" + "\n".join([f"- {i}" for i in qa_issues])
-    
-    def generate_architecture_diagram(
-        self,
-        context: DocumentAnalysis,
-        architecture: str
-    ) -> str:
-        """
-        Generate Mermaid diagram for the architecture.
-        
-        Args:
-            context: Document analysis
-            architecture: Generated architecture spec
-        
-        Returns:
-            Mermaid diagram code
-        """
-        self.log("Generating architecture diagram")
-        
-        system_prompt = """You are a technical diagramming expert.
-
-Create a Mermaid.js diagram that visualizes the system architecture.
-
-DIAGRAM TYPES TO USE:
-1. Use 'graph TD' for system overview (top-down flow)
-2. Use 'sequenceDiagram' for API flows
-3. Use 'erDiagram' for database relationships
-
-RULES:
-- Keep diagrams clean and readable
-- Use clear node names (no special characters)
-- Include all major components
-- Show data flow direction
-- Group related components
-
-OUTPUT FORMAT:
-Provide the Mermaid code wrapped in ```mermaid blocks.
-"""
-
-        user_prompt = f"""Create architecture diagrams for this system:
-
-PROJECT TYPE: {context.project_type.value}
-
-FEATURES:
-{chr(10).join(f'- {f}' for f in context.features)}
-
-ARCHITECTURE SUMMARY:
-{architecture[:2500]}
-
-Generate THREE diagrams:
-1. System Overview (graph TD) - Show all components and their connections
-2. API Flow (sequenceDiagram) - Show a typical user request flow
-3. Database Schema (erDiagram) - Show main entities and relationships
-
-Format each in separate ```mermaid code blocks with labels."""
-
-        try:
-            response = self.call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=2000)
-            self.log("Architecture diagrams generated")
-            return response
-        except Exception as e:
-            self.log(f"Diagram generation failed: {e}", "ERROR")
-            return self._fallback_diagram(context)
-    
-    def _fallback_diagram(self, context: DocumentAnalysis) -> str:
-        """Generate a simple fallback diagram."""
-        return f"""## Architecture Diagrams
-
-### System Overview
-
-```mermaid
-graph TD
-    Client[Client Browser/App]
-    API[API Server]
-    DB[(Database)]
-    Cache[Cache Layer]
-    
-    Client -->|HTTP/HTTPS| API
-    API -->|Query| DB
-    API -->|Read/Write| Cache
-    Cache -->|Fallback| DB
-```
-
-### Typical Request Flow
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant A as API Server
-    participant D as Database
-    
-    C->>A: Request
-    A->>D: Query Data
-    D-->>A: Return Data
-    A-->>C: JSON Response
-```
-
-### Database Schema (Simplified)
-
-```mermaid
-erDiagram
-    USER ||--o{{ ORDER : places
-    USER {{
-        string id PK
-        string email
-        string name
-    }}
-    ORDER {{
-        string id PK
-        string user_id FK
-        datetime created_at
-    }}
-```
-
-*Note: These are simplified placeholder diagrams. Actual architecture may differ.*
-"""
-

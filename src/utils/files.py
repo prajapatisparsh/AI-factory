@@ -4,6 +4,7 @@ Handles playbook reading/writing and project output generation.
 """
 
 import os
+import re
 from datetime import datetime
 from typing import Optional, List
 from pathlib import Path
@@ -32,7 +33,9 @@ def load_playbook(name: str) -> str:
         Playbook content as string, or empty string if not found.
     """
     ensure_directories()
-    filename = f"{name}_playbook.md"
+    # Sanitize name to prevent path traversal (M-6)
+    safe_name = re.sub(r'[^a-z0-9_\-]', '', name.lower())
+    filename = f"{safe_name}_playbook.md"
     filepath = MEMORY_DIR / filename
     
     try:
@@ -58,7 +61,8 @@ def save_playbook(name: str, content: str) -> bool:
         Success status
     """
     ensure_directories()
-    filename = f"{name}_playbook.md"
+    safe_name = re.sub(r'[^a-z0-9_\-]', '', name.lower())
+    filename = f"{safe_name}_playbook.md"
     filepath = MEMORY_DIR / filename
     
     try:

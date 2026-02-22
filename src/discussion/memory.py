@@ -3,11 +3,14 @@ Shared Memory - Persistent scratchpad for agent collaboration.
 Stores decisions, reasoning, and notes that all agents can access.
 """
 
+import json
+import logging
+import os
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
-import os
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,6 +58,10 @@ class SharedMemory:
             "discussions"
         )
         os.makedirs(base_dir, exist_ok=True)
+        # Restrict to owner-only on Linux/macOS (H-6)
+        if os.name != 'nt':
+            import stat
+            os.chmod(base_dir, stat.S_IRWXU)
         return os.path.join(base_dir, f"{self.project_id}_memory.json")
     
     def _load(self) -> None:
@@ -66,11 +73,17 @@ class SharedMemory:
                     self.decisions = [Decision(**d) for d in data.get('decisions', [])]
                     self.notes = [AgentNote(**n) for n in data.get('notes', [])]
                     self.context = data.get('context', {})
-            except Exception:
-                pass  # Start fresh if file is corrupted
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"Memory file corrupted (JSON error) for project '{self.project_id}': {e}. Starting fresh."
+                )
+            except OSError as e:
+                logger.error(
+                    f"Memory file unreadable for project '{self.project_id}': {e}. Starting fresh."
+                )
     
     def _save(self) -> None:
-        """Persist to disk."""
+        """Persist to disk using atomic write to prevent file corruption."""
         data = {
             'decisions': [
                 {
@@ -96,8 +109,19 @@ class SharedMemory:
             ],
             'context': self.context
         }
-        with open(self._file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+        tmp_path = self._file_path + ".tmp"
+        try:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, self._file_path)
+        except OSError as e:
+            logger.error(
+                f"Failed to persist memory for project '{self.project_id}': {e}"
+            )
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
     
     def add_decision(
         self,

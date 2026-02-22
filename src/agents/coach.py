@@ -8,7 +8,7 @@ from datetime import datetime
 import re
 
 from src.agents.base import BaseAgent
-from src.schemas import PMEvaluation, LearnedRule
+from src.schemas import PMEvaluation, LearnedRule, extract_json_array
 from src.utils.files import (
     load_playbook, 
     append_rule_to_playbook, 
@@ -150,38 +150,22 @@ Maximum 3 lessons. Each must be actionable, generic, and explain why."""
     
     def _parse_lessons_response(self, response: str) -> List[LearnedRule]:
         """Parse LLM response into LearnedRule objects."""
-        import json
-        
-        # Try to extract JSON
-        json_patterns = [
-            r'```json\s*([\s\S]*?)\s*```',
-            r'```\s*([\s\S]*?)\s*```',
-            r'\[[\s\S]*\]'
-        ]
-        
-        for pattern in json_patterns:
-            matches = re.findall(pattern, response)
-            for match in matches:
-                json_str = match.strip()
-                if json_str.startswith('['):
+        data = extract_json_array(response)
+        if data:
+            lessons = []
+            for item in data[:3]:  # Max 3 lessons
+                if isinstance(item, dict):
                     try:
-                        data = json.loads(json_str)
-                        lessons = []
-                        for item in data[:3]:  # Max 3 lessons
-                            if isinstance(item, dict):
-                                try:
-                                    rule = LearnedRule(
-                                        date=item.get('date', datetime.now().strftime('%Y-%m-%d')),
-                                        rule=item.get('rule', '')[:150],
-                                        target_playbook=item.get('target_playbook', 'pm')
-                                    )
-                                    lessons.append(rule)
-                                except Exception:
-                                    continue
-                        return lessons
-                    except json.JSONDecodeError:
+                        rule = LearnedRule(
+                            date=item.get('date', datetime.now().strftime('%Y-%m-%d')),
+                            rule=item.get('rule', '')[:150],
+                            target_playbook=item.get('target_playbook', 'pm')
+                        )
+                        lessons.append(rule)
+                    except Exception:
                         continue
-        
+            return lessons
+
         return []
     
     def _add_lesson_to_playbook(

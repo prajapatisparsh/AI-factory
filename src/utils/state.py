@@ -37,6 +37,11 @@ def init_session_state() -> None:
         'error': None,
         'start_time': None,
         'phase_times': {},
+        # Guided mode
+        'pipeline_mode': 'one_shot',
+        'guided_paused_at': None,
+        'guided_pipeline_data': {},
+        'guided_edits': {},
     }
     
     for key, default_value in defaults.items():
@@ -62,13 +67,18 @@ def update_workflow_state(**kwargs) -> None:
     current = st.session_state.get('workflow', {})
     
     # Update with new values
+    valid_keys = WorkflowState.model_fields.keys()
     for key, value in kwargs.items():
-        if hasattr(WorkflowState, key):
+        if key in valid_keys:
             # Convert Pydantic models to dict for storage
             if hasattr(value, 'model_dump'):
                 current[key] = value.model_dump()
+            elif isinstance(value, list) and value and hasattr(value[0], 'model_dump'):
+                current[key] = [item.model_dump() for item in value]
             else:
                 current[key] = value
+        else:
+            log_message(f"update_workflow_state: unknown key '{key}' ignored", "WARNING")
     
     # Validate the updated state
     try:
@@ -143,19 +153,7 @@ def get_cached_tavily(query: str) -> Optional[str]:
 
 
 def log_message(message: str, level: str = "INFO") -> None:
-    """Add a log message to session state AND print to terminal."""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # ALWAYS print to terminal for visibility
-    if level == "ERROR":
-        logger.error(message)
-    elif level == "WARNING":
-        logger.warning(message)
-    else:
-        logger.info(message)
-    
-    # Also store in session state for UI display
+    """Add a log message to session state."""
     try:
         init_session_state()
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -170,8 +168,15 @@ def log_message(message: str, level: str = "INFO") -> None:
         if len(st.session_state['logs']) > 100:
             st.session_state['logs'] = st.session_state['logs'][-100:]
     except Exception:
-        # Outside Streamlit context - already printed above
-        pass
+        # Outside Streamlit context - just print to console
+        import logging
+        logger = logging.getLogger(__name__)
+        if level == "ERROR":
+            logger.error(message)
+        elif level == "WARNING":
+            logger.warning(message)
+        else:
+            logger.info(message)
 
 
 def get_logs() -> list:

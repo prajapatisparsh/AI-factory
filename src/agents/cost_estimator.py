@@ -7,6 +7,38 @@ from typing import List, Dict
 from src.schemas import DocumentAnalysis, UserStory
 
 
+def _classify_complexity(num_features: int) -> Dict[str, str]:
+    """Return cost/timeline tier based on feature count.
+
+    Returns a dict with keys: complexity, dev_weeks, timeline_months,
+    team_size, cost_range.
+    """
+    if num_features <= 5:
+        return {
+            "complexity": "Low",
+            "dev_weeks": "2-4",
+            "timeline_months": "~1",
+            "team_size": "1-2",
+            "cost_range": "$5,000 - $15,000",
+        }
+    elif num_features <= 12:
+        return {
+            "complexity": "Medium",
+            "dev_weeks": "4-8",
+            "timeline_months": "1-2",
+            "team_size": "2-3",
+            "cost_range": "$15,000 - $40,000",
+        }
+    else:
+        return {
+            "complexity": "High",
+            "dev_weeks": "8-16",
+            "timeline_months": "2-4",
+            "team_size": "3-5",
+            "cost_range": "$40,000 - $100,000+",
+        }
+
+
 def estimate_project_costs(
     context: DocumentAnalysis,
     user_stories: List[UserStory],
@@ -21,23 +53,12 @@ def estimate_project_costs(
     # Estimate complexity based on features
     num_features = len(context.features)
     num_stories = len(user_stories)
-    
-    # Simple complexity calculation
-    if num_features <= 5:
-        complexity = "Low"
-        dev_weeks = "2-4"
-        team_size = "1-2"
-        cost_range = "$5,000 - $15,000"
-    elif num_features <= 12:
-        complexity = "Medium"
-        dev_weeks = "4-8"
-        team_size = "2-3"
-        cost_range = "$15,000 - $40,000"
-    else:
-        complexity = "High"
-        dev_weeks = "8-16"
-        team_size = "3-5"
-        cost_range = "$40,000 - $100,000+"
+
+    tier = _classify_complexity(num_features)
+    complexity = tier["complexity"]
+    dev_weeks = tier["dev_weeks"]
+    team_size = tier["team_size"]
+    cost_range = tier["cost_range"]
     
     # Check for complexity indicators in architecture
     has_auth = "auth" in architecture.lower() or "jwt" in architecture.lower()
@@ -97,27 +118,19 @@ def generate_executive_summary(
     num_features = len(context.features)
     num_stories = len(user_stories)
     project_type = context.project_type.value.replace('_', ' ').title()
-    
+
     # Get top 5 features for the summary
     top_features = context.features[:5]
-    
+
     # Get critical stories
     critical_stories = [s for s in user_stories if s.priority.value == "Critical"]
     high_stories = [s for s in user_stories if s.priority.value == "High"]
-    
-    # Estimate timeline from cost estimation
-    if num_features <= 5:
-        timeline_weeks = "2-4"
-        timeline_months = "~1"
-        budget_range = "$5,000 - $15,000"
-    elif num_features <= 12:
-        timeline_weeks = "4-8"
-        timeline_months = "1-2"
-        budget_range = "$15,000 - $40,000"
-    else:
-        timeline_weeks = "8-16"
-        timeline_months = "2-4"
-        budget_range = "$40,000 - $100,000+"
+
+    # Classify complexity (reuses the same tiers as estimate_project_costs)
+    tier = _classify_complexity(num_features)
+    timeline_weeks = tier["dev_weeks"]
+    timeline_months = tier["timeline_months"]
+    budget_range = tier["cost_range"]
     
     # Detect key integrations/risks based on architecture
     arch_lower = architecture.lower()

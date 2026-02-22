@@ -3,9 +3,59 @@ Pydantic schemas for the AI Factory system.
 These enforce strict validation across all agent outputs.
 """
 
+import json
+import re
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+
+
+# ---------------------------------------------------------------------------
+# R-1: JSON extraction helpers — shared across all agents
+# ---------------------------------------------------------------------------
+
+def extract_json_object(response: str) -> Optional[Dict[str, Any]]:
+    """Extract the first JSON object ``{...}`` from an LLM response.
+
+    Tries markdown code fences first, then falls back to a bare ``{...}`` scan.
+    Returns the parsed ``dict`` or ``None`` if nothing valid is found.
+    """
+    patterns = [
+        r'```json\s*([\s\S]*?)\s*```',
+        r'```\s*([\s\S]*?)\s*```',
+        r'\{[\s\S]*\}',
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, response):
+            s = match.strip()
+            if s.startswith('{'):
+                try:
+                    return json.loads(s)
+                except json.JSONDecodeError:
+                    continue
+    return None
+
+
+def extract_json_array(response: str) -> Optional[List[Any]]:
+    """Extract the first JSON array ``[...]`` from an LLM response.
+
+    Tries markdown code fences first, then falls back to a bare ``[...]`` scan.
+    Returns the parsed ``list`` or ``None`` if nothing valid is found.
+    """
+    patterns = [
+        r'```json\s*([\s\S]*?)\s*```',
+        r'```\s*([\s\S]*?)\s*```',
+        r'\[[\s\S]*\]',
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, response):
+            s = match.strip()
+            if s.startswith('['):
+                try:
+                    return json.loads(s)
+                except json.JSONDecodeError:
+                    continue
+    return None
 
 
 class ProjectType(str, Enum):
@@ -131,41 +181,6 @@ class ClarificationQuestionsCollection(BaseModel):
     questions: List[ClarificationQuestion] = Field(default_factory=list, max_length=10)
 
 
-class ClarificationAnswer(BaseModel):
-    """PM's answer to a clarification question."""
-    question_id: str = Field(..., description="ID of the question being answered")
-    answer: str = Field(..., description="The answer provided")
-
-
-class ArchitectureSpec(BaseModel):
-    """Tech Lead's architecture specification."""
-    tech_stack: Dict[str, str] = Field(default_factory=dict, description="Technology stack choices")
-    tech_justification: str = Field(default="", description="Why these technologies were chosen")
-    database_schema: str = Field(default="", description="Database schema or description")
-    api_design: str = Field(default="", description="API endpoints, methods, payloads")
-    security_strategy: str = Field(default="", description="Security approach")
-    scalability_plan: str = Field(default="", description="How system scales")
-    observability: str = Field(default="", description="Logging, monitoring, alerts")
-
-
-class BackendSpec(BaseModel):
-    """Backend specification from DevTeam."""
-    routes: str = Field(default="", description="API routes definition")
-    models: str = Field(default="", description="Data models")
-    business_logic: str = Field(default="", description="Core business logic")
-    error_handling: str = Field(default="", description="Error handling approach")
-    environment_vars: List[str] = Field(default_factory=list, description="Required env vars")
-
-
-class FrontendSpec(BaseModel):
-    """Frontend specification from DevTeam."""
-    components: str = Field(default="", description="Component structure")
-    state_management: str = Field(default="", description="State management approach")
-    routing: str = Field(default="", description="Routing configuration")
-    styling: str = Field(default="", description="Styling approach")
-    error_handling: str = Field(default="", description="Error boundary setup")
-
-
 class LearnedRule(BaseModel):
     """A rule learned by the Coach agent."""
     date: str = Field(..., description="Date in YYYY-MM-DD format")
@@ -201,44 +216,6 @@ class WorkflowState(BaseModel):
     clarifications: Dict[str, str] = Field(default_factory=dict, description="Answered clarifications")
     previous_scolding: str = Field(default="", description="Previous rejection feedback")
     warnings: List[str] = Field(default_factory=list, description="Accumulated warnings")
-
-
-class TeamDecision(BaseModel):
-    """A decision made by the team through discussion."""
-    topic_id: str = Field(..., description="Unique topic identifier")
-    topic_name: str = Field(..., description="Human-readable topic name")
-    decision: str = Field(..., description="The decision made")
-    rationale: str = Field(default="", description="Why this decision was made")
-    participants: List[str] = Field(default_factory=list, description="Agents involved")
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence level")
-    timestamp: str = Field(default="", description="When the decision was made")
-
-
-class DiscussionState(BaseModel):
-    """State of multi-agent discussions for a project."""
-    project_id: str = Field(default="default", description="Project identifier")
-    decisions: List[TeamDecision] = Field(default_factory=list, description="Decisions made")
-    active_topics: List[str] = Field(default_factory=list, description="Topics currently being discussed")
-    completed_topics: List[str] = Field(default_factory=list, description="Topics with decisions")
-    
-    def add_decision(self, decision: TeamDecision) -> None:
-        """Record a new decision."""
-        self.decisions.append(decision)
-        if decision.topic_id in self.active_topics:
-            self.active_topics.remove(decision.topic_id)
-        if decision.topic_id not in self.completed_topics:
-            self.completed_topics.append(decision.topic_id)
-    
-    def get_decision(self, topic_id: str) -> Optional[TeamDecision]:
-        """Get decision for a specific topic."""
-        for d in self.decisions:
-            if d.topic_id == topic_id:
-                return d
-        return None
-    
-    def has_decision(self, topic_id: str) -> bool:
-        """Check if a topic has been decided."""
-        return topic_id in self.completed_topics
 
 
 # Helper functions for schema validation
