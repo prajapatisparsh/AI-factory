@@ -53,6 +53,13 @@ Create a comprehensive architecture document that includes:
 6. **Scalability Plan** - How the system handles growth
 7. **Observability** - Logging, monitoring, alerting approach
 
+MANDATORY RULES:
+- If the client specified a technology in "Technology Hints", USE IT unless it presents a known security vulnerability. Document any overrides with justification.
+- Include SPECIFIC stable version numbers for every library (e.g., FastAPI 0.109.0 — not "latest").
+- Every API design MUST include a rate limiting strategy (requests/minute per endpoint).
+- Any JWT-based auth MUST specify refresh token rotation strategy and token expiry.
+- Every architecture MUST include a DB connection pool size, max overflow, and timeout.
+
 Design for:
 - Clean separation of concerns
 - Horizontal scalability

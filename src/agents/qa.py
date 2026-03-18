@@ -121,7 +121,28 @@ Consider these attack patterns:
 - **Insecure Deserialization**: Object injection, RCE via deserialization
 - **Component Vulnerabilities**: Outdated dependencies with known CVEs
 
-Be thorough. Flag missing mitigations even if not explicitly vulnerable."""
+Be thorough. Flag missing mitigations even if not explicitly vulnerable.
+
+## OWASP TOP 10 MAPPING
+For each security issue found, map it to the relevant OWASP category:
+- A01: Broken Access Control
+- A02: Cryptographic Failures
+- A03: Injection
+- A04: Insecure Design
+- A05: Security Misconfiguration
+- A06: Vulnerable & Outdated Components
+- A07: Identification & Authentication Failures
+- A08: Software & Data Integrity Failures
+- A09: Security Logging & Monitoring Failures
+- A10: Server-Side Request Forgery (SSRF)
+
+Add the OWASP code in brackets next to each security_flag, e.g. "Missing CSRF token on payment form [A01]"
+
+## ATTACK CHAIN ANALYSIS
+For the TWO most dangerous issues you find, trace the full exploit chain:
+  Entry point → vulnerability exploited → lateral movement → final impact
+Example: "Public file upload → no MIME check → .php RCE → full server compromise"
+Include this in the issue description for CRITICAL/HIGH items."""
 
         system_prompt = self.build_system_prompt(base_system)
         
@@ -134,13 +155,13 @@ Be thorough. Flag missing mitigations even if not explicitly vulnerable."""
         user_prompt = f"""Analyze these MVP specifications for quality issues:
 
 ## Architecture
-{architecture[:2500]}
+{architecture[:4000]}
 
 ## Backend Specification
-{backend_spec[:3000]}
+{backend_spec[:4000]}
 
 ## Frontend Specification
-{frontend_spec[:3000]}
+{frontend_spec[:4000]}
 
 ## User Stories Being Implemented
 {stories_summary}

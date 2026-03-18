@@ -116,7 +116,21 @@ Bad examples (DO NOT USE):
 - "Backend needs work" (no specific guidance)
 - "The client's auth was wrong" (project-specific)"""
 
-        combined_feedback = f"""Scolding:
+        # Inject existing rules from each playbook so the LLM avoids duplicates
+        playbook_context_lines = []
+        for pb_name in ['pm', 'tech_lead', 'backend', 'frontend', 'qa']:
+            existing = get_playbook_rules(pb_name)[:8]  # Top 8 rules per playbook
+            if existing:
+                playbook_context_lines.append(f"[{pb_name}] existing rules:")
+                playbook_context_lines.extend(f"  • {r}" for r in existing)
+        playbook_context = "\n".join(playbook_context_lines)
+
+        combined_feedback = f"""EXISTING PLAYBOOK RULES (do NOT generate duplicates of these):
+{playbook_context}
+
+---
+
+Scolding:
 {scolding}
 
 Specific Issues:

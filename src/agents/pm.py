@@ -49,9 +49,15 @@ class PMAgent(BaseAgent):
         
         base_system = """You are an experienced Product Manager creating user stories.
 
+BEFORE writing any story, think step by step:
+1. Which features still have no story? (ensure complete coverage)
+2. Which persona is most affected by each feature?
+3. What is the ONE testable outcome that proves this story is done?
+Only after this mental check, write the stories.
+
 Create comprehensive user stories that:
-1. Cover ALL features mentioned in the requirements
-2. Include acceptance criteria that are testable and measurable
+1. Cover ALL features mentioned in the requirements — never duplicate coverage
+2. Include acceptance criteria that are testable and measurable (not vague like "works correctly")
 3. Prioritize based on business value and dependencies
 4. Map each story to a specific user persona
 5. Use the format: "As a [role], I want [action] so that [benefit]"
@@ -71,7 +77,7 @@ Each story must have:
 
 PROJECT TYPE: {context.project_type.value}
 
-FEATURES TO COVER:
+FEATURES TO COVER (cover EVERY one — do not skip):
 {bullet_list(context.features)}
 
 USER PERSONAS:
@@ -202,13 +208,17 @@ Provide clear, actionable answers that:
 
 PROJECT CONTEXT:
 Type: {context.project_type.value}
-Features: {', '.join(context.features[:5])}
+Features: {', '.join(context.features)}
 
 USER STORIES:
 {stories_summary}
 
 QUESTIONS:
 {questions_text}
+
+Answer each question independently. Do NOT skip or merge questions.
+If uncertain, make a concrete decision and state your assumption explicitly.
+"Decision deferred" is a LAST RESORT, not a default — always attempt to answer.
 
 Return JSON with answers for each question ID:
 {{
@@ -276,9 +286,14 @@ Score the specifications strictly using this rubric:
 - QA Compliance (0-15): Were critical issues from QA addressed?
 - Security (0-10): Is there proper auth, input validation, data protection?
 
-Be STRICT. A score of 90+ means production-ready. Most first drafts score 60-80.
+PASSING THRESHOLD: 85+
+- Score 85-89 = Acceptable with minor caveats (APPROVED)
+- Score 90-100 = Production-ready (APPROVED)
+- Score < 85 = Needs revision (REJECTED)
 
-If REJECTING (score < 90), provide detailed scolding in this format:
+IMPORTANT: The five breakdown scores MUST sum exactly to the total score.
+
+If REJECTING (score < 85), provide detailed scolding in this format:
 WHAT: [specific issue]
 WHY: [impact on users/business]
 FIX: [concrete guidance for improvement]"""

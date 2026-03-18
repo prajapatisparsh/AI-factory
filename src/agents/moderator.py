@@ -28,7 +28,7 @@ class ModeratorAgent(BaseAgent):
     """
     
     def __init__(self):
-        super().__init__(playbook_name=None)
+        super().__init__(playbook_name="moderator")
     
     def get_agent_name(self) -> str:
         return "ModeratorAgent"
@@ -123,6 +123,11 @@ Given the different positions, suggest a middle-ground solution that:
 2. Identifies shared goals
 3. Proposes a practical compromise
 4. Explains why this compromise works
+5. Sets a clear acceptance condition so the team knows when consensus is reached
+
+IMPORTANT: If the disagreement is minor (e.g. naming, colour, formatting), propose the simplest
+option and declare it decided — do NOT escalate trivial issues.
+If no middle ground exists after 2 rounds, explicitly recommend escalation to a human.
 
 Be constructive and solution-oriented."""
 

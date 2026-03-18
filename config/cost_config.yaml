@@ -1,73 +1,171 @@
 # Cost Estimation Configuration
-# All values are configurable
-# Currency: INR (Indian Rupees)
+# All values in INR (Indian Rupees) — Indian market 2026
+# Infrastructure pricing based on AWS/GCP ap-south-1 (Mumbai) region
 
 currency: "INR"
 currency_symbol: "₹"
 
-# Hourly rates in INR
+# ---------------------------------------------------------------------------
+# Developer hourly rates (INR) — Indian freelance / agency market
+# ---------------------------------------------------------------------------
 hourly_rates:
-  junior_developer: 500
-  mid_developer: 1000
-  senior_developer: 1500
-  tech_lead: 2500
-  qa_engineer: 800
-  devops_engineer: 1300
-  ui_ux_designer: 1100
+  junior_developer: 500      # ₹400–₹600/hr
+  mid_developer: 1000        # ₹800–₹1200/hr
+  senior_developer: 1500     # ₹1200–₹2000/hr
+  tech_lead: 2500            # ₹2000–₹3000/hr
+  qa_engineer: 800           # ₹600–₹1000/hr
+  devops_engineer: 1300      # ₹1000–₹1600/hr
+  ui_ux_designer: 1100       # ₹900–₹1300/hr
 
-# Team compositions for different project sizes
+working_hours_per_week: 40
+
+# ---------------------------------------------------------------------------
+# Team compositions per project tier
+# ---------------------------------------------------------------------------
 team_compositions:
   mvp:
-    description: "Small MVP with 2-4 weeks timeline"
-    junior_developer: 1
-    senior_developer: 1
+    description: "Small MVP — 3-5 weeks"
+    weeks_low: 3
+    weeks_high: 5
+    team:
+      junior_developer: 1
+      senior_developer: 1
+      qa_engineer: 1
 
   standard:
-    description: "Standard project with 4-8 weeks timeline"
-    junior_developer: 2
-    mid_developer: 1
-    senior_developer: 1
-    qa_engineer: 1
+    description: "Standard project — 6-10 weeks"
+    weeks_low: 6
+    weeks_high: 10
+    team:
+      junior_developer: 2
+      mid_developer: 1
+      senior_developer: 1
+      qa_engineer: 1
 
   enterprise:
-    description: "Large project with 8+ weeks timeline"
-    junior_developer: 3
-    mid_developer: 2
-    senior_developer: 2
-    tech_lead: 1
-    qa_engineer: 2
-    devops_engineer: 1
+    description: "Enterprise project — 12-20 weeks"
+    weeks_low: 12
+    weeks_high: 20
+    team:
+      junior_developer: 2
+      mid_developer: 2
+      senior_developer: 2
+      tech_lead: 1
+      qa_engineer: 2
+      devops_engineer: 1
 
-# Feature complexity multipliers
-complexity_multipliers:
-  simple: 1.0
-  moderate: 1.5
-  complex: 2.5
-  very_complex: 4.0
-
-# Infrastructure costs (monthly estimates in INR)
+# ---------------------------------------------------------------------------
+# Infrastructure monthly costs (INR) — AWS/GCP India (ap-south-1)
+# ---------------------------------------------------------------------------
 infrastructure_costs:
-  hosting:
-    basic: 4000
-    standard: 16000
-    premium: 40000
-  database:
-    basic: 2000
-    standard: 8000
-    premium: 25000
-  cdn:
-    basic: 800
-    standard: 4000
-    premium: 16000
-  monitoring:
-    basic: 0
-    standard: 4000
-    premium: 12000
+  app_server_containers:
+    basic: 4000        # t3.small / single container
+    standard: 14000    # t3.medium x2 / managed container cluster
+    premium: 40000     # m5.large x3 + auto-scaling group
 
-# Third-party service estimates (monthly in INR)
+  load_balancer:
+    basic: 1500        # AWS ALB (low traffic)
+    standard: 4000     # ALB with path-based routing
+    premium: 10000     # ALB + WAF + Route 53 health checks
+
+  ci_cd_pipeline:
+    basic: 0           # GitHub Actions free tier
+    standard: 2000     # GitHub Actions paid + self-hosted runner
+    premium: 6000      # GitHub Actions + ArgoCD / CodePipeline
+
+  managed_database:
+    basic: 3500        # RDS db.t3.micro / Cloud SQL smallest
+    standard: 10000    # RDS db.t3.medium / Cloud SQL standard
+    premium: 35000     # RDS db.m5.large Multi-AZ / Cloud Spanner
+
+  database_backups_replicas:
+    basic: 1000        # Automated snapshots only
+    standard: 3500     # Snapshots + 1 read replica
+    premium: 12000     # Multi-AZ + 2 read replicas + PITR
+
+  object_storage:
+    basic: 600         # S3/GCS ~50GB storage + egress
+    standard: 2500     # S3/GCS ~200GB + CDN transfer
+    premium: 8000      # S3/GCS ~1TB + lifecycle policies + Glacier archival
+
+  cdn:
+    basic: 1000        # Cloudflare Free / AWS CloudFront (low traffic)
+    standard: 4000     # CloudFront standard distribution
+    premium: 15000     # CloudFront + custom cache policies + signed URLs
+
+  ssl_domain:
+    basic: 200         # Let's Encrypt (free) + domain renewal amortized
+    standard: 400      # ACM certificate + Route53 hosted zone
+    premium: 800       # Extended validation cert + multi-domain
+
+  monitoring_alerting:
+    basic: 0           # Grafana + Prometheus self-hosted / free tier
+    standard: 4000     # Datadog / New Relic Lite
+    premium: 12000     # Datadog Pro / New Relic Full
+
+  log_management:
+    basic: 0           # CloudWatch free tier / Loki self-hosted
+    standard: 2500     # CloudWatch Logs Insights / Elastic Cloud
+    premium: 8000      # Elastic Cloud full + log retention 90d
+
+  security_waf:
+    basic: 1200        # Cloudflare free WAF
+    standard: 5000     # AWS WAF basic rules
+    premium: 18000     # AWS Shield Standard + WAF managed rules + GuardDuty
+
+# ---------------------------------------------------------------------------
+# Third-party service estimates (monthly INR)
+# ---------------------------------------------------------------------------
 third_party_services:
-  auth_provider: 2000
-  email_service: 1600
-  payment_gateway: 0 # Usually % based
-  analytics: 0
-  error_tracking: 2000
+  email_service:
+    basic: 1500        # AWS SES / Mailgun free tier
+    standard: 3000     # SendGrid Essentials
+    premium: 6000      # SendGrid Pro / Postmark
+
+  auth_provider:
+    free: 0            # Firebase Auth free tier / self-hosted
+    standard: 3000     # Auth0 Essentials
+    premium: 8000      # Auth0 Professional
+
+  sms_otp:
+    basic: 1000        # MSG91 / Twilio (low volume ~500 SMS)
+    standard: 2500     # MSG91 / Twilio (medium volume)
+    premium: 6000      # Twilio Verify (high volume)
+
+  error_tracking:
+    free: 0            # Sentry free tier
+    standard: 2000     # Sentry Team
+
+  push_notifications:
+    free: 0            # Firebase FCM (free)
+
+  maps_api:
+    basic: 1500        # Google Maps Platform (low usage)
+    standard: 5000     # Google Maps Platform (medium usage)
+
+  analytics:
+    free: 0            # GA4 / Mixpanel free tier
+
+  payment_gateway: 0   # Razorpay/Stripe charge % per transaction (1.5–3%)
+
+# ---------------------------------------------------------------------------
+# One-time setup costs (INR)
+# ---------------------------------------------------------------------------
+one_time_setup:
+  devops_bootstrap_low: 8000    # CI/CD, Docker, Terraform IaC setup
+  devops_bootstrap_high: 20000
+  qa_tooling_low: 3000          # Test environment setup
+  qa_tooling_high: 10000
+  domain_registration_low: 1000  # 2-year registration
+  domain_registration_high: 3000
+  design_assets_low: 3000        # Figma + icon packs + fonts
+  design_assets_high: 7000
+
+# ---------------------------------------------------------------------------
+# Complexity multipliers for feature counts
+# ---------------------------------------------------------------------------
+feature_thresholds:
+  mvp_max: 5
+  standard_max: 12
+  # > 12 features = enterprise tier
+

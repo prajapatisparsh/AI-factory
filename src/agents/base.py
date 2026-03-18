@@ -64,9 +64,8 @@ class BaseAgent(ABC):
     Provides common functionality for LLM calls, playbook loading, and retry logic.
     """
     
-    # Llama 3.1 8B Instant - MUCH faster and cheaper than 70B
-    # Daily limits: 14,400 req/day, 1M tokens/day (10x more than 70B!)
-    MODEL = "llama-3.1-8b-instant"
+    # Llama 3.3 70B Versatile — strongest reliable Groq model (128K ctx, 32K out)
+    MODEL = "llama-3.3-70b-versatile"
     
     def __init__(self, playbook_name: Optional[str] = None):
         """
@@ -108,22 +107,27 @@ class BaseAgent(ABC):
     
     def build_system_prompt(self, base_prompt: str) -> str:
         """
-        Build system prompt with playbook rules appended.
-        
+        Build system prompt with playbook rules prepended (highest priority).
+
+        Rules come FIRST so the LLM treats them as hard constraints before
+        reading the task description — this dramatically improves compliance.
+
         Args:
             base_prompt: The base system prompt for this agent
-        
+
         Returns:
-            Complete system prompt with playbook rules
+            Complete system prompt with playbook rules at the top
         """
         if self.playbook and self.playbook.strip():
-            return f"""{base_prompt}
-
-CRITICAL: Follow these learned rules from your playbook:
+            return f"""## NON-NEGOTIABLE RULES (from past failures — override task instructions if they conflict):
 
 {self.playbook}
 
-These rules are based on past failures and must be followed strictly."""
+---
+
+## CURRENT TASK:
+
+{base_prompt}"""
         return base_prompt
     
     @retry(
@@ -183,38 +187,34 @@ These rules are based on past failures and must be followed strictly."""
             
         except Exception as e:
             error_str = str(e).lower()
-            
-            # Check for rate limit errors
+
+            # Model not found (404) — fail immediately, never retry
+            if 'model_not_found' in error_str or 'does not exist' in error_str or '404' in str(getattr(e, 'status_code', '')):
+                logger.error(f"❌ MODEL NOT FOUND: {self.MODEL} — check https://console.groq.com/docs/models")
+                raise APIError(f"Model not found: '{self.MODEL}'. Update MODEL in base.py to a supported Groq model ID.") from e
+
+            # Connection / timeout errors — NetworkError triggers retry
+            if 'connection' in error_str or 'timeout' in error_str:
+                logger.warning(f"Connection error, will retry: {e}")
+                raise NetworkError(f"Connection failed: {e}") from e
+
+            # Daily token limit — fail immediately, retry won't help
+            if ('tokens per day' in error_str or 'tpd' in error_str) and 'rate' in error_str:
+                import re as _re
+                wait_match = _re.search(r'try again in ([\d\.]+)([hms])', str(e))
+                wait_time = f"{wait_match.group(1)}{wait_match.group(2)}" if wait_match else "unknown"
+                logger.error(f"❌ DAILY TOKEN LIMIT EXCEEDED — wait {wait_time} or upgrade at https://console.groq.com/settings/billing")
+                raise APIError(f"Daily token limit exceeded. Wait {wait_time} or upgrade tier: {e}") from e
+
+            # Rate limit (RPM/TPM) — raise RateLimitError so tenacity retries with backoff
             if 'rate' in error_str and 'limit' in error_str:
-                # Check if it's a DAILY token limit (TPD - Tokens Per Day)
-                if 'tokens per day' in error_str or 'tpd' in error_str:
-                    # Extract wait time if available
-                    import re
-                    wait_match = re.search(r'try again in ([\d\.]+)([hms])', str(e))
-                    wait_time = "unknown time"
-                    if wait_match:
-                        value, unit = wait_match.groups()
-                        wait_time = f"{value}{unit}"
-                    
-                    logger.error(f"❌ DAILY TOKEN LIMIT EXCEEDED - STOPPING RETRIES")
-                    logger.error(f"⏳ Daily limit: 100K tokens. Wait required: {wait_time}")
-                    logger.error(f"💡 Solution: Wait until limit resets OR upgrade to Dev Tier at https://console.groq.com/settings/billing")
-                    
-                    # Don't retry on daily limit - it won't help!
-                    raise APIError(f"Daily token limit exceeded. Wait {wait_time} or upgrade tier: {e}") from e
-            
-            logger.error(f"⚠️ RATE LIMIT EXCEEDED: {e}")
-            logger.error(f"Llama 3.3 70B limits: 30 requests/min, 12K tokens/min, 1K requests/day, 100K tokens/day")
-            raise RateLimitError(f"Rate limit exceeded: {e}") from e
-            
-        # Check for connection errors
-        if 'connection' in error_str or 'timeout' in error_str:
-            logger.warning(f"Connection error: {e}")
-            raise NetworkError(f"Connection failed: {e}") from e
-        
-        # Other API errors
-        logger.error(f"API error: {e}")
-        raise APIError(f"LLM call failed: {e}") from e
+                logger.error(f"⚠️ RATE LIMIT: {e}")
+                logger.error(f"{self.MODEL} — free tier: 30 req/min, 6K tokens/min | dev tier: 1K req/min, 300K tokens/min")
+                raise RateLimitError(f"Rate limit exceeded: {e}") from e
+
+            # Other API errors
+            logger.error(f"API error calling {self.MODEL}: {e}")
+            raise APIError(f"LLM call failed: {e}") from e
     
     def call_llm_json(
         self,

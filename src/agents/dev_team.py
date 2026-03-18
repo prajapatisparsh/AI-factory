@@ -162,10 +162,12 @@ Focus on:
 5. Performance requirements
 6. Integration points
 
-Generate specific, actionable questions. Maximum 10 questions."""
+Before asking a question: check if the answer is already implied by the acceptance criteria. If yes, skip it.
+Label each question: BLOCKER (blocks development) or NICE-TO-HAVE.
+Prioritize BLOCKERs first. Maximum 10 questions total."""
 
         stories_text = "\n".join([
-            f"- {s.id}: {s.title} (Acceptance: {', '.join(s.acceptance_criteria[:2])})"
+            f"- {s.id}: {s.title} (Acceptance: {', '.join(s.acceptance_criteria)})"
             for s in user_stories[:15]
         ])
         
@@ -254,6 +256,13 @@ Create a comprehensive backend specification including:
 4. **Authentication** - Auth flow and middleware
 5. **Error Handling** - Error types and response formats
 6. **Environment Variables** - All required configuration
+
+SECURITY NON-NEGOTIABLES (fail QA if omitted):
+- All password fields stored as bcrypt hash (`password_hash`), NEVER plaintext
+- All API error responses return `{{ "error": "...", "code": "..." }}` WITHOUT stack traces or internal paths
+- All file upload endpoints include size limit (10 MB default) and MIME type allowlist validation
+- All multi-step database writes wrapped in a transaction with explicit rollback handling
+- Specify DB connection pool size (default: 10), max_overflow, and connection_timeout
 
 Use the verified library versions provided. Include code examples where helpful."""
 
@@ -360,6 +369,14 @@ Create a comprehensive frontend specification including:
 5. **Styling** - Design system and responsive approach
 6. **Error Handling** - Error boundaries and user feedback
 7. **Accessibility** - A11y considerations
+
+SECURITY NON-NEGOTIABLES:
+- AUTH TOKEN STORAGE: Always use httpOnly cookies served by the backend (NOT localStorage or sessionStorage).
+  Document the cookie name, domain, sameSite, and secure flags.
+- All forms MUST disable the submit button during submission and show a loading state.
+- All API calls MUST have error handling that shows user-friendly messages (never raw error strings).
+
+IMPORTANT: Return the COMPLETE specification. Do NOT omit sections that need no changes.
 
 Use the verified library versions provided. Include component examples where helpful."""
 
